@@ -1,0 +1,16 @@
+
+# Resources
+*.png
+
+
+# Project
+.spyproject/
+.venv
+dist/
+uv.lock
+.python-version
+.pypirc
+
+# Python Artifacts
+*.egg-info
+__pycache__/

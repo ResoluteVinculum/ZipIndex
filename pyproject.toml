@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zipindex"
+description = "Simple indexing for working with files inside zipfiles"
+readme = "README.md"
+authors = [
+    { name="Trent Oberlander", email="trentoberlander@gmail.com"}
+]
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = { file = "LICENSE" }
+keywords = ["files"]
+dependencies = [
+]
+dynamic = ["version"]
+
+[tool.hatch.build]
+include = [
+]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["zipindex"]
+
+[tool.hatch.build.targets.sdist]
+packages = ["zipindex"]
+
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.1.0"
+
+[project.urls]
+homepage = "https://www.github.com/ResoluteVinculum/ZipIndex"
+issues = "https://www.github.com/ResoluteVinculum/ZipIndex/issues"
