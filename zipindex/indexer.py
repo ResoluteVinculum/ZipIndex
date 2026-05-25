@@ -20,9 +20,9 @@ def member_endswith(member: zipfile.ZipInfo,
     """
     return member.filename.endswith(match_key)
 
-class ZipIndex:
+class ZipItem:
     """
-    ZipIndex
+    ZipItem
     --------
     Object for selecting a single file out of a ZipFile object with direct 
     access.
@@ -30,14 +30,14 @@ class ZipIndex:
     """
     
     def __repr__(self) -> str:
-        return (f"ZipIndex(zipfile_path={self.zipfile_path}, "
+        return (f"ZipItem(zipfile_path={self.zipfile_path}, "
                          f"member_name={self.member_name})")
     
     def __init__(self, 
                  zipfile_path: str,
                  member_name: str) -> Self:
         """
-        Initialize a ZipIndex object.
+        Initialize a ZipItem object.
 
         Parameters
         ----------
@@ -147,7 +147,7 @@ class ZipIndex:
         Returns
         -------
         dict[str, tuple[Self]]
-            {category : list[ZipIndex]}.
+            {category : list[ZipItem]}.
 
         """
         assert categories
@@ -168,6 +168,6 @@ class ZipIndex:
                         output[category].append(member)
         return output
 
-idx = ZipIndex.categorical_factory(zipfile_path='C:/dev/data.zip', 
+idx = ZipItem.categorical_factory(zipfile_path='C:/dev/data.zip', 
                                    categories={"empty": {b"": 0},
                                                "bin" : {b"BIN": 0}})
