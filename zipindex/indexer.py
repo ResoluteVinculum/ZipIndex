@@ -29,12 +29,12 @@ class ZipIndex:
         self.zipfile_path = zipfile_path
         self.member_name = member_name
         
-    def open(self) -> os.PathLike:
-        self.zf = zipfile.ZipFile(self.zipfile_path, 'r')
+    def open(self, mode:str = 'r') -> os.PathLike:
+        self.zf = zipfile.ZipFile(self.zipfile_path, mode)
         matched_file = max(self.zf.filelist,
                            key=partial(member_endswith, 
                                        match_key=self.member_name))
-        self.fid = self.zf.open(matched_file, 'r')
+        self.fid = self.zf.open(matched_file, mode)
         return self.fid
     
     def suffix(self):
