@@ -6,7 +6,7 @@ zipfile internal uses
 """
 
 import zipfile
-from typing import Self, Iterable
+from typing import Self
 import os
 from functools import partial
 import re
@@ -14,9 +14,20 @@ import re
 
 def member_endswith(member: zipfile.ZipInfo,
                     match_key: str) -> bool:
+    """
+    Picklable method for compatibility
+
+    """
     return member.filename.endswith(match_key)
 
 class ZipIndex:
+    """
+    ZipIndex
+    --------
+    Object for selecting a single file out of a ZipFile object with direct 
+    access.
+    
+    """
     
     def __repr__(self) -> str:
         return (f"ZipIndex(zipfile_path={self.zipfile_path}, "
@@ -25,11 +36,40 @@ class ZipIndex:
     def __init__(self, 
                  zipfile_path: str,
                  member_name: str) -> Self:
+        """
+        Initialize a ZipIndex object.
+
+        Parameters
+        ----------
+        zipfile_path : str
+            Path to zipfile.ZipFile.
+        member_name : str
+            Unique suffix for identifying a member in the zipfile.
+
+        Returns
+        -------
+        Self
+            
+        """
         
         self.zipfile_path = zipfile_path
         self.member_name = member_name
         
     def open(self, mode:str = 'r') -> os.PathLike:
+        """
+        Opens the internal file to be read. Modes are binary modes.
+
+        Parameters
+        ----------
+        mode : str, optional
+            File mode 'r'|'a'|'w'. The default is 'r'.
+
+        Returns
+        -------
+        os.PathLike
+            Binary open mode access to internal file.
+
+        """
         self.zf = zipfile.ZipFile(self.zipfile_path, mode)
         matched_file = max(self.zf.filelist,
                            key=partial(member_endswith, 
@@ -37,7 +77,19 @@ class ZipIndex:
         self.fid = self.zf.open(matched_file, mode)
         return self.fid
     
-    def suffix(self):
+    def close(self):
+        """
+        Releases file hooks.
+
+        """
+        self.fid.close()
+        self.zf.close()
+    
+    def suffix(self) -> str:
+        """
+        File extension of internal file
+
+        """
         m = re.match(r"^.*(\.\w+)$", self.member_name)
         if m:
             return m.group(1)
@@ -48,13 +100,25 @@ class ZipIndex:
         return self.open()
     
     def __exit__(self, etype, e, tb) -> None:
-        self.fid.close()
-        self.zf.close()
+        self.close()
         return None
     
 
     @classmethod
     def factory(cls, zipfile_path: str) -> dict[str, Self]:
+        """
+        Returns a index of individual files inside of the provided
+        zipfile, no directories.
+
+        Parameters
+        ----------
+        zipfile_path : str
+
+        Returns
+        -------
+        dict[str, Self]
+
+        """
         with zipfile.ZipFile(zipfile_path, 'r') as zf:
             output = {
                 member.filename : cls(zipfile_path, 
@@ -88,22 +152,20 @@ class ZipIndex:
         """
         assert categories
         output = {cat: [] for cat in categories}
-        with zipfile.ZipFile(zipfile_path, 'r') as zf:
-            for category, definition in categories.items():
-                for member in zf.filelist:
-                    if member.filename.endswith("/"): continue
-                    with zf.open(member, 'r') as fid:
-                        matched = []
-                        for condition, position in definition.items():
-                            fid.seek(position, 0)
-                            if len(condition) == 0:
-                                b = fid.read()
-                            else:
-                                b = fid.read(len(condition))
-                            matched.append((b == condition))
-                        if all(matched):
-                            output[category].append(cls(zipfile_path, 
-                                                        member.filename.split("/")[-1]))
+        index = cls.factory(zipfile_path)
+        for category, definition in categories.items():
+            for name, member in index.items():
+                with member.open('r') as fid:
+                    matched = []
+                    for condition, position in definition.items():
+                        fid.seek(position, 0)
+                        if len(condition) == 0:
+                            b = fid.read()
+                        else:
+                            b = fid.read(len(condition))
+                        matched.append((b == condition))
+                    if all(matched):
+                        output[category].append(member)
         return output
 
 idx = ZipIndex.categorical_factory(zipfile_path='C:/dev/data.zip', 
