@@ -66,7 +66,7 @@ class ZipIndex:
     @classmethod
     def categorical_factory(cls, 
                             zipfile_path: str,
-                            categories: dict[str, Iterable[dict[int, bytes]]]) -> dict[str, tuple[Self]]:
+                            categories: dict[str, dict[bytes, int]]) -> dict[str, tuple[Self]]:
         """
         Provides a factory for categorizing internal files in a zipfile.ZipFile
         Must match all conditions of at least one category to be included in 
@@ -76,13 +76,14 @@ class ZipIndex:
         ----------
         zipfile_path : str
             Path to the zipfile.
-        categories : dict[str, Iterable[dict[int, bytes]]]
+        categories : dict[str, dict[bytes, int]]
             Dictionary definition of bytes-wise matching for type detection.
+            
             Ex: {"empty" : [{0: b""}]}
         Returns
         -------
         dict[str, tuple[Self]]
-            {category : tuple[ZipIndex]}.
+            {category : list[ZipIndex]}.
 
         """
         assert categories
@@ -93,7 +94,7 @@ class ZipIndex:
                     if member.filename.endswith("/"): continue
                     with zf.open(member, 'r') as fid:
                         matched = []
-                        for position, condition in definition.items():
+                        for condition, position in definition.items():
                             fid.seek(position, 0)
                             if len(condition) == 0:
                                 b = fid.read()
@@ -106,5 +107,5 @@ class ZipIndex:
         return output
 
 idx = ZipIndex.categorical_factory(zipfile_path='C:/dev/data.zip', 
-                                   categories={"empty": {0: b""},
-                                               "bin" : {0: b"BIN"}})
+                                   categories={"empty": {b"": 0},
+                                               "bin" : {b"BIN": 0}})
