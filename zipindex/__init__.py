@@ -1,2 +1,2 @@
 #
-from zipindex.indexer import ZipIndex
+from zipindex.item import ZipItem
