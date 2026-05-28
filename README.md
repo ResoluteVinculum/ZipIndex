@@ -13,10 +13,7 @@ inst = ZipItem(zipfile_path="...", member_name="...")
 members: dict[str, ZipItem] = ZipItem.factory(zipfile_path="...")
 
 # Categorical Factory
-categories: dict[str, ZipItem] = ZipItem.categorical_factory(zipfile_path="...", categories={"empty" : {0 : b""}})
+categories: dict[str, ZipItem] = ZipItem.factory(zipfile_path="...", categories={"empty" : {0 : b""}})
 
-# Use
-with inst.open() as fid:
-    data = fid.read()
 
 ```
