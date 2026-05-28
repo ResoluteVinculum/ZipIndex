@@ -5,12 +5,13 @@ zipfile internal uses
 
 """
 
-import zipfile
+import zipfile, tarfile
+import tarfile
 from typing import Self, Iterable
 import os
 import re
 
-def member_match(member: zipfile.ZipInfo,
+def member_match(member: str,
                  match_pattern: str) -> bool:
     """
     Picklable method for compatibility
@@ -20,7 +21,7 @@ def member_match(member: zipfile.ZipInfo,
         match_pattern += "$"
     if not match_pattern.startswith("^"):
         match_pattern = "^" + match_pattern
-    return bool(re.match(match_pattern, member.filename))
+    return bool(re.match(match_pattern, member))
 
 class ZipItem:
     """
@@ -53,13 +54,15 @@ class ZipItem:
         self.zipfile_path = zipfile_path
         self.member_pattern = member_pattern
         self._pointer = 0
-
-        with zipfile.ZipFile(self.zipfile_path, 'r') as zf:
-            members = [m.filename for m in zf.filelist
+        
+        self.compression_class = self.detect_compression_type(zipfile_path)
+        self._kwd, self._access, self._read = self.get_compressed_member_keywords(zipfile_path)
+        
+        with self.compression_class(self.zipfile_path, 'r') as zf:
+            members = [m for m in getattr(zf, self._kwd)()
                        if member_match(m, self.member_pattern)]
         if len(members) == 1:
             self.member_name = members[0]
-            self.Path = zipfile.Path(self.zipfile_path, self.member_name)
         elif len(members) > 1:
             ambig = "\n  - " + "\n  - ".join(members)
             raise ValueError(f"Pattern: '{member_pattern}' is ambiguous in '{zipfile_path}'!\nMembers:{ambig}")
@@ -87,9 +90,9 @@ class ZipItem:
             Binary open mode access to internal file.
 
         """
-        self.zf = zipfile.ZipFile(self.zipfile_path, mode)
-        file = self.zf.getinfo(self.member_name)
-        self.fid = self.zf.open(file, mode)
+        self.zf = self.compression_class(self.zipfile_path, mode)
+        kwargs = {mode: "r"} if self.compression_class is zipfile.ZipFile else {}
+        self.fid = getattr(self.zf, self._read)(self.member_name, **kwargs)
         return self.fid
     
     def seek(self, 
@@ -127,7 +130,8 @@ class ZipItem:
         File extension of internal file
 
         """
-        return self.Path.suffix
+        p, ext = os.path.splitext(self.member_name)
+        return ext
     
     
     def __enter__(self) -> os.PathLike:
@@ -136,7 +140,29 @@ class ZipItem:
     def __exit__(self, etype, e, tb) -> None:
         return self.close()
     
+    @classmethod
+    def detect_compression_type(cls, zipfile_path:str):
+        if zipfile.is_zipfile(zipfile_path):
+            compression_class = zipfile.ZipFile
+        elif tarfile.is_tarfile(zipfile_path):
+            compression_class = tarfile.TarFile
+        if not compression_class:
+            raise NotImplementedError(f"No supported compression types for {zipfile_path}!")
+        
+        return compression_class
+    
+    @classmethod
+    def get_compressed_member_keywords(cls, zipfile_path:str):
+        if zipfile.is_zipfile(zipfile_path):
+            members = "namelist", "getinfo", "open"
+        elif tarfile.is_tarfile(zipfile_path):
+            members = "getnames", "getmember", "extractfile"
 
+        if not members:
+            raise NotImplementedError(f"No supported compression types for {zipfile_path}!")
+        
+        return members
+    
     @classmethod
     def factory(cls, 
                 zipfile_path: str,
@@ -166,19 +192,22 @@ class ZipItem:
 
         """
         output = {}
+        compression_class = cls.detect_compression_type(zipfile_path)
+        method, access, read = cls.get_compressed_member_keywords(zipfile_path)
         if not categories:
-            with zipfile.ZipFile(zipfile_path, 'r') as zf:
-                for member in zf.filelist:
-                    if member.filename.endswith("/"): continue
+            with compression_class(zipfile_path, 'r') as zf:
+                for member_name in getattr(zf, method)():
+                    member = getattr(zf, access)(member_name)
+                    if member_name.endswith("/"): continue
                     if pattern:
-                        if not re.match(pattern, member.filename):
+                        if not re.match(pattern, member_name):
                             continue
-                    name = re.escape(member.filename)
+                    name = re.escape(member_name)
                     item = cls(zipfile_path, name)
                     if extensions:
                         if item.suffix not in extensions:
                             continue
-                    output[member.filename] = item
+                    output[member_name] = item
         else:
             output = {cat : [] for cat in categories}
             index = cls.factory(zipfile_path, pattern=pattern, extensions=extensions)
@@ -208,4 +237,6 @@ class ZipItem:
     
 
 if __name__ == "__main__":
-    pass
+    index = ZipItem.factory('C:/dev/data.tar')
+    a = index['data/file1']
+    a.open()
