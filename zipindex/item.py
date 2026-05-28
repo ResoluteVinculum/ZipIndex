@@ -140,7 +140,7 @@ class ZipItem:
             Current position in the file.
 
         """
-        with self.open():
+        with self:
             self.__pointer = self.fid.seek(offset, whence)
         return self.__pointer
     
@@ -155,7 +155,7 @@ class ZipItem:
             Bytes from current position to n-bytes after.
 
         """
-        with self.open():
+        with self:
             self.fid.seek(self.__pointer)
             out = self.fid.read(n)
             self.__pointer = self.fid.tell()
