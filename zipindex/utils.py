@@ -9,6 +9,12 @@ from inspect import getfullargspec
 from typing import Iterable, Self
 
 class hybrid_method:
+    """
+    Wrapper method for making a method that can be used both as a class/static
+    method with passed arguments or as a method that looks to the instance for
+    the selected argument names.
+    
+    """
     
     def __init__(self, *check_kwargs: Iterable[str]) -> Self:
         self.check_kwargs = check_kwargs

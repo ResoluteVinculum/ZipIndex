@@ -57,15 +57,14 @@ class ZipItem:
         self.member_pattern = member_pattern
         self.__pointer = 0
         
-        self.compression_class = self.detect_compression_type(zipfile_path)
+        self.compression_class = self.get_compression_class(zipfile_path)
         (self.__member_iternames_kwd, 
          self.__member_access_kwd, 
          self.__open_internal_kwd) = self.get_compressed_member_keywords(
              zipfile_path)
         
-        with self.compression_class(self.zipfile_path, 'r') as zf:
-            members = [m for m in getattr(zf, self.__member_iternames_kwd)()
-                       if member_match(m, self.member_pattern)]
+        members = [m for m in self.get_member_names()
+                   if member_match(m, self.member_pattern)]
         if len(members) == 1:
             self.member_name = members[0]
         elif len(members) > 1:
@@ -74,16 +73,38 @@ class ZipItem:
         else:
             raise ValueError(f"Pattern: '{member_pattern}' matches no members of '{zipfile_path}'!")
     
-    def neighbor(self, member_name:str) -> Self:
-        return ZipItem(self.zipfile_path, member_pattern=member_name)
+    def neighbor(self, member_pattern:str) -> Self:
+        """
+        Access to another item in the Archive File
+
+        Parameters
+        ----------
+        member_pattern : str
+            Full match string for accessing another member.
+
+        Returns
+        -------
+        Self
+            Another instance of the class.
+
+        """
+        return ZipItem(self.zipfile_path, member_pattern=member_pattern)
     
     def __getitem__(self, item: str) -> Self:
+        """
+        Indexing for `neighbor` method
+
+        """
         return self.neighbor(item)
     
     def _ipython_key_completions_(self) -> list[str]:
         return self.keys()
     
     def keys(self) -> list[str]:
+        """
+        Access to list of neighbors
+
+        """
         return self.get_member_names()
     
     def __repr__(self) -> str:
@@ -110,19 +131,47 @@ class ZipItem:
     def seek(self, 
              offset:int=0,
              whence:int = 0) -> int:
+        """
+        open(file, 'rb').seek(offset, whence)
+
+        Returns
+        -------
+        int
+            Current position in the file.
+
+        """
         with self.open():
             self.__pointer = self.fid.seek(offset, whence)
         return self.__pointer
     
     def read(self,
-             n:int = None):
+             n:int = None) -> bytes:
+        """
+        open(file, 'rb').read(n)
+
+        Returns
+        -------
+        out : bytes
+            Bytes from current position to n-bytes after.
+
+        """
         with self.open():
             self.fid.seek(self.__pointer)
             out = self.fid.read(n)
             self.__pointer = self.fid.tell()
         return out
     
-    def extract(self, destination_directory) -> None:
+    def extract(self, destination_directory: str) -> None:
+        """
+        Direct access to extracting a file
+
+        Parameters
+        ----------
+        destination_directory : str
+            Destination for extraction.
+
+        """
+        os.makedirs(destination_directory, exist_ok=True)
         with self.open():
             self.zf.extract(self.member_name, destination_directory)
         return
@@ -153,8 +202,25 @@ class ZipItem:
         return self.close()
     
     @hybrid_method('zipfile_path')
-    def detect_compression_type(cls_or_self, 
-                                zipfile_path:str = None):
+    def get_compression_class(cls_or_self, 
+                              zipfile_path:str):
+        """
+        Returns the python type of the reader that should be used to open
+        the selected file.
+
+        Parameters
+        ----------
+        cls_or_self : type(Self) | Self
+            Class or Instance.
+        zipfile_path : str
+            Path to the file.
+
+        Returns
+        -------
+        compression_class : type
+            File object type to open the zipfile with.
+
+        """
         compression_class = None
         if zipfile.is_zipfile(zipfile_path):
             compression_class = zipfile.ZipFile
@@ -167,7 +233,25 @@ class ZipItem:
     
     @hybrid_method('zipfile_path')
     def get_compressed_member_keywords(cls_or_self, 
-                                       zipfile_path:str):
+                                       zipfile_path:str) -> tuple[str]:
+        """
+        The different compression libraries have different attributes/methods
+        used for accessing internal members
+
+        Parameters
+        ----------
+        cls_or_self : type(Self) | Self
+            Class or Instance.
+        zipfile_path : str
+            Path to the file.
+
+
+        Returns
+        -------
+        members : tuple[str]
+            iternames method name, getmember name, and read name.
+
+        """
         members = "","",""
         if zipfile.is_zipfile(zipfile_path):
             members = "namelist", "getinfo", "open"
@@ -180,11 +264,27 @@ class ZipItem:
         return members
     
     @hybrid_method('zipfile_path')
-    def get_member_names(cls_or_self, zipfile_path:str) -> list:
+    def get_member_names(cls_or_self, zipfile_path:str) -> list[str]:
+        """
+        Retrieves the names of all members in the zipfile
+
+        Parameters
+        ----------
+        cls_or_self : type(Self) | Self
+            Class or Instance.
+        zipfile_path : str
+            Path to the file.
+
+        Returns
+        -------
+        list
+            Names of files (not directories) in the archive.
+
+        """
         (iternames_kwd, 
          access_kwd, 
          open_internal_kwd) = cls_or_self.get_compressed_member_keywords(zipfile_path)
-        compression_class = cls_or_self.detect_compression_type(zipfile_path)
+        compression_class = cls_or_self.get_compression_class(zipfile_path)
         
         with compression_class(zipfile_path) as cf:
             members = getattr(cf, iternames_kwd)()
@@ -197,7 +297,25 @@ class ZipItem:
     def get_member(cls_or_self, 
                    zipfile_path: str, 
                    member_name: str) -> zipfile.ZipInfo|tarfile.TarInfo:
-        Class = cls_or_self.detect_compression_type(zipfile_path)
+        """
+        Info class retrieval for a member in the archive.
+
+        Parameters
+        ----------
+        cls_or_self : type(Self) | Self
+            Class or Instance.
+        zipfile_path : str
+            Path to the file.
+        member_name : str
+            Explicit member name to retrieve.
+
+        Returns
+        -------
+        member : zipfile.ZipInfo|tarfile.TarInfo
+            Info class from the appropriate package.
+
+        """
+        Class = cls_or_self.get_compression_class(zipfile_path)
         names, member, stream = cls_or_self.get_compressed_member_keywords(zipfile_path)
         with Class(zipfile_path) as zf:
             member = getattr(zf, member)(member_name)
@@ -271,7 +389,3 @@ class ZipItem:
                 if not member.filename.endswith("/")}
         return output
     
-
-if __name__ == "__main__":
-    index = ZipItem.factory(r"C:\Users\trent\OneDrive\Desktop\Projects\programming\GlyphLoom.zip")
-
