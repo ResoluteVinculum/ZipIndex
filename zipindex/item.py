@@ -52,6 +52,7 @@ class ZipItem:
         
         self.zipfile_path = zipfile_path
         self.member_pattern = member_pattern
+        self._pointer = 0
 
         with zipfile.ZipFile(self.zipfile_path, 'r') as zf:
             members = [m.filename for m in zf.filelist
@@ -90,6 +91,26 @@ class ZipItem:
         file = self.zf.getinfo(self.member_name)
         self.fid = self.zf.open(file, mode)
         return self.fid
+    
+    def seek(self, 
+             offset:int=0,
+             whence:int = 0) -> int:
+        with self.open():
+            self._pointer = self.fid.seek(offset, whence)
+        return self._pointer
+    
+    def read(self,
+             n:int = None):
+        with self.open():
+            self.fid.seek(self._pointer)
+            out = self.fid.read(n)
+            self._pointer = self.fid.tell()
+        return out
+    
+    def extract(self, destination_directory) -> None:
+        with self.open():
+            self.zf.extract(self.member_name, destination_directory)
+        return
     
     def close(self) -> None:
         """
@@ -165,7 +186,7 @@ class ZipItem:
                 for name, member in index.items():
                     with member.open('r') as fid:
                         matched = []
-                        for condition, positionn in definition.items():
+                        for condition, position in definition.items():
                             fid.seek(position, 0)
                             if len(condition) == 0:
                                 b = fid.read()
