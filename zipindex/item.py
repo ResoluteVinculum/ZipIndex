@@ -5,12 +5,14 @@ zipfile internal uses
 
 """
 
-import zipfile, tarfile
+import zipfile
+import tarfile
 from typing import Self, Iterable
 import os
 import re
 
-from zipindex.utils import hybrid_method
+from zipindex.utils import HybridMethod
+
 
 def member_match(member: str,
                  match_pattern: str) -> bool:
@@ -22,19 +24,19 @@ def member_match(member: str,
         match_pattern += "$"
     if not match_pattern.startswith("^"):
         match_pattern = "^" + match_pattern
-    return bool(re.match(match_pattern, member))                
-            
-    
+    return bool(re.match(match_pattern, member))
+
+
 class ZipItem:
     """
     ZipItem
     --------
     Object for selecting a single file out of a ZipFile object with direct 
     access.
-    
+
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  zipfile_path: str,
                  member_pattern: str) -> Self:
         """
@@ -50,30 +52,30 @@ class ZipItem:
         Returns
         -------
         Self
-            
+
         """
-        
+
         self.zipfile_path = zipfile_path
         self.member_pattern = member_pattern
         self.__pointer = 0
-        
+        self.zf = None
+        self.fid = None
+
         self.compression_class = self.get_compression_class(zipfile_path)
-        (self.__member_iternames_kwd, 
-         self.__member_access_kwd, 
-         self.__open_internal_kwd) = self.get_compressed_member_keywords(
-             zipfile_path)
-        
+
         members = [m for m in self.get_member_names()
                    if member_match(m, self.member_pattern)]
         if len(members) == 1:
             self.member_name = members[0]
         elif len(members) > 1:
             ambig = "\n  - " + "\n  - ".join(members)
-            raise ValueError(f"Pattern: '{member_pattern}' is ambiguous in '{zipfile_path}'!\nMembers:{ambig}")
+            raise ValueError(f"Pattern: '{member_pattern}' is ambiguous in '{
+                             zipfile_path}'!\nMembers:{ambig}")
         else:
-            raise ValueError(f"Pattern: '{member_pattern}' matches no members of '{zipfile_path}'!")
-    
-    def neighbor(self, member_pattern:str) -> Self:
+            raise ValueError(f"Pattern: '{member_pattern}' matches no members of '{
+                             zipfile_path}'!")
+
+    def neighbor(self, member_pattern: str) -> Self:
         """
         Access to another item in the Archive File
 
@@ -89,26 +91,27 @@ class ZipItem:
 
         """
         return ZipItem(self.zipfile_path, member_pattern=member_pattern)
-    
+
     def __getitem__(self, item: str) -> Self:
         """
         Indexing for `neighbor` method
 
         """
         return self.neighbor(item)
-    
+
     def _ipython_key_completions_(self) -> list[str]:
         return self.keys()
-    
+
     def keys(self) -> list[str]:
         """
         Access to list of neighbors
 
         """
         return self.get_member_names()
-    
+
     def __repr__(self) -> str:
-        return f"ZipItem(zipfile_path={self.zipfile_path}, member_pattern={re.escape(self.member_name)})"
+        return (f"ZipItem(zipfile_path={self.zipfile_path},"
+                f" member_pattern={re.escape(self.member_name)})")
 
     def __str__(self) -> str:
         return self.member_name
@@ -125,12 +128,13 @@ class ZipItem:
 
         """
         self.zf = self.compression_class(self.zipfile_path)
-        self.fid = getattr(self.zf, self.__open_internal_kwd)(self.member_name)
+        _, internals, _ = self.get_compressed_member_keywords()
+        self.fid = getattr(self.zf, internals)(self.member_name)
         return self.fid
-    
-    def seek(self, 
-             offset:int=0,
-             whence:int = 0) -> int:
+
+    def seek(self,
+             offset: int = 0,
+             whence: int = 0) -> int:
         """
         open(file, 'rb').seek(offset, whence)
 
@@ -143,9 +147,9 @@ class ZipItem:
         with self:
             self.__pointer = self.fid.seek(offset, whence)
         return self.__pointer
-    
+
     def read(self,
-             n:int = None) -> bytes:
+             n: int = None) -> bytes:
         """
         open(file, 'rb').read(n)
 
@@ -160,7 +164,7 @@ class ZipItem:
             out = self.fid.read(n)
             self.__pointer = self.fid.tell()
         return out
-    
+
     def extract(self, destination_directory: str) -> None:
         """
         Direct access to extracting a file
@@ -174,8 +178,7 @@ class ZipItem:
         os.makedirs(destination_directory, exist_ok=True)
         with self.open():
             self.zf.extract(self.member_name, destination_directory)
-        return
-    
+
     def close(self) -> None:
         """
         Releases file hooks.
@@ -183,34 +186,32 @@ class ZipItem:
         """
         self.fid.close()
         self.zf.close()
-        return
-    
+
     @property
     def suffix(self) -> str:
         """
         File extension of internal file
 
         """
-        p, ext = os.path.splitext(self.member_name)
+        _, ext = os.path.splitext(self.member_name)
         return ext
-    
-    
+
     def __enter__(self) -> os.PathLike:
         return self.open()
-    
+
     def __exit__(self, etype, e, tb) -> None:
         return self.close()
-    
-    @hybrid_method('zipfile_path')
-    def get_compression_class(cls_or_self, 
-                              zipfile_path:str):
+
+    @HybridMethod('zipfile_path')
+    def get_compression_class(self,
+                              zipfile_path: str = None):
         """
         Returns the python type of the reader that should be used to open
         the selected file.
 
         Parameters
         ----------
-        cls_or_self : type(Self) | Self
+        self : type(Self) | Self
             Class or Instance.
         zipfile_path : str
             Path to the file.
@@ -227,20 +228,21 @@ class ZipItem:
         elif tarfile.is_tarfile(zipfile_path):
             compression_class = tarfile.TarFile
         if not compression_class:
-            raise NotImplementedError(f"No supported compression types for {zipfile_path}!")
-        
+            raise NotImplementedError(
+                f"No supported compression types for {zipfile_path}!")
+
         return compression_class
-    
-    @hybrid_method('zipfile_path')
-    def get_compressed_member_keywords(cls_or_self, 
-                                       zipfile_path:str) -> tuple[str]:
+
+    @HybridMethod('zipfile_path')
+    def get_compressed_member_keywords(self,
+                                       zipfile_path: str = None) -> tuple[str]:
         """
         The different compression libraries have different attributes/methods
         used for accessing internal members
 
         Parameters
         ----------
-        cls_or_self : type(Self) | Self
+        self : type(Self) | Self
             Class or Instance.
         zipfile_path : str
             Path to the file.
@@ -252,25 +254,26 @@ class ZipItem:
             iternames method name, getmember name, and read name.
 
         """
-        members = "","",""
+        members = "", "", ""
         if zipfile.is_zipfile(zipfile_path):
             members = "namelist", "getinfo", "open"
         elif tarfile.is_tarfile(zipfile_path):
             members = "getnames", "getmember", "extractfile"
 
         if not members:
-            raise NotImplementedError(f"No supported compression types for {zipfile_path}!")
-        
+            raise NotImplementedError(
+                f"No supported compression types for {zipfile_path}!")
+
         return members
-    
-    @hybrid_method('zipfile_path')
-    def get_member_names(cls_or_self, zipfile_path:str) -> list[str]:
+
+    @HybridMethod('zipfile_path')
+    def get_member_names(self, zipfile_path: str = None) -> list[str]:
         """
         Retrieves the names of all members in the zipfile
 
         Parameters
         ----------
-        cls_or_self : type(Self) | Self
+        self : type(Self) | Self
             Class or Instance.
         zipfile_path : str
             Path to the file.
@@ -281,28 +284,28 @@ class ZipItem:
             Names of files (not directories) in the archive.
 
         """
-        (iternames_kwd, 
-         access_kwd, 
-         open_internal_kwd) = cls_or_self.get_compressed_member_keywords(zipfile_path)
-        compression_class = cls_or_self.get_compression_class(zipfile_path)
-        
+        (iternames_kwd,
+         _,
+         _) = self.get_compressed_member_keywords(zipfile_path)
+        compression_class = self.get_compression_class(zipfile_path)
+
         with compression_class(zipfile_path) as cf:
             members = getattr(cf, iternames_kwd)()
-        return [member for member in members 
+        return [member for member in members
                 if not member.endswith("/") or any(
-                        (len(m) > len(member) and m.startswith(member))
-                        for m in members)]
-    
-    @hybrid_method('zipfile_path', 'member_name')
-    def get_member(cls_or_self, 
-                   zipfile_path: str, 
-                   member_name: str) -> zipfile.ZipInfo|tarfile.TarInfo:
+                    (len(m) > len(member) and m.startswith(member))
+                    for m in members)]
+
+    @HybridMethod('zipfile_path', 'member_name')
+    def get_member(self,
+                   zipfile_path: str = None,
+                   member_name: str = None) -> zipfile.ZipInfo | tarfile.TarInfo:
         """
         Info class retrieval for a member in the archive.
 
         Parameters
         ----------
-        cls_or_self : type(Self) | Self
+        self : type(Self) | Self
             Class or Instance.
         zipfile_path : str
             Path to the file.
@@ -315,19 +318,19 @@ class ZipItem:
             Info class from the appropriate package.
 
         """
-        Class = cls_or_self.get_compression_class(zipfile_path)
-        names, member, stream = cls_or_self.get_compressed_member_keywords(zipfile_path)
-        with Class(zipfile_path) as zf:
+        archive_type = self.get_compression_class(zipfile_path)
+        _, member, _ = self.get_compressed_member_keywords(zipfile_path)
+        with archive_type(zipfile_path) as zf:
             member = getattr(zf, member)(member_name)
         return member
-            
+
     @classmethod
-    def factory(cls, 
+    def factory(cls,
                 zipfile_path: str,
                 *,
                 pattern: str = None,
                 categories: dict[str, dict[bytes, int]] = None,
-                extensions: Iterable[str] = None) -> dict[str, Self|list[Self]]:
+                extensions: Iterable[str] = None) -> dict[str, Self | list[Self]]:
         """
         Returns a index of individual files inside of the provided
         zipfile, no directories.
@@ -352,7 +355,8 @@ class ZipItem:
         output = {}
         if not categories:
             for member_name in cls.get_member_names(zipfile_path):
-                if member_name.endswith("/"): continue
+                if member_name.endswith("/"):
+                    continue
                 if pattern:
                     if not re.match(pattern, member_name):
                         continue
@@ -363,8 +367,9 @@ class ZipItem:
                         continue
                 output[member_name] = item
         else:
-            output = {cat : [] for cat in categories}
-            index = cls.factory(zipfile_path, pattern=pattern, extensions=extensions)
+            output = {cat: [] for cat in categories}
+            index = cls.factory(
+                zipfile_path, pattern=pattern, extensions=extensions)
             for category, definition in categories.items():
                 for name, member in index.items():
                     with member.open('r') as fid:
@@ -375,17 +380,9 @@ class ZipItem:
                                 b = fid.read()
                             else:
                                 b = fid.read(len(condition))
-                            matched.append( (b == condition) )
+                            matched.append((b == condition))
                         if extensions:
-                            matched.append( (member.suffix in extensions) )
+                            matched.append((member.suffix in extensions))
                         if all(matched):
                             output[category].append(member)
         return output
-        with zipfile.ZipFile(zipfile_path, 'r') as zf:
-            output = {
-                member.filename : cls(zipfile_path, 
-                                      member.filename.split("/")[-1]) 
-                for member in zf.filelist
-                if not member.filename.endswith("/")}
-        return output
-    
