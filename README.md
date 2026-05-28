@@ -1,4 +1,4 @@
-# ZipItem
+# ZipIndex
 Simple, pure-python object package for dealing with many files inside of
 zipfiles.
 
