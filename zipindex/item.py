@@ -6,7 +6,6 @@ zipfile internal uses
 """
 
 import zipfile, tarfile
-import tarfile
 from typing import Self, Iterable
 import os
 import re
