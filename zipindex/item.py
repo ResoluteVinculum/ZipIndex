@@ -176,8 +176,11 @@ class ZipItem:
 
         """
         os.makedirs(destination_directory, exist_ok=True)
-        with self.open():
-            self.zf.extract(self.member_name, destination_directory)
+        member = os.path.basename(self.member_name)
+        file = os.path.join(destination_directory, member)
+        with open(file, 'wb') as fid:
+            fid.write(self.read())
+
 
     def close(self) -> None:
         """
@@ -291,10 +294,8 @@ class ZipItem:
 
         with compression_class(zipfile_path) as cf:
             members = getattr(cf, iternames_kwd)()
-        return [member for member in members
-                if not member.endswith("/") or any(
-                    (len(m) > len(member) and m.startswith(member))
-                    for m in members)]
+        return [member for i, member in enumerate(members)
+                if not any(m.startswith(member) for m in members[i+1:])]
 
     @HybridMethod('zipfile_path', 'member_name')
     def get_member(self,
@@ -353,36 +354,28 @@ class ZipItem:
 
         """
         output = {}
-        if not categories:
-            for member_name in cls.get_member_names(zipfile_path):
-                if member_name.endswith("/"):
-                    continue
-                if pattern:
-                    if not re.match(pattern, member_name):
-                        continue
-                name = re.escape(member_name)
-                item = cls(zipfile_path, name)
-                if extensions:
-                    if item.suffix not in extensions:
-                        continue
+        for member_name in cls.get_member_names(zipfile_path):
+            if member_name.endswith("/"):
+                continue
+            if pattern and not re.match(pattern, member_name):
+                continue
+            item = cls(zipfile_path, re.escape(member_name))
+            if extensions and item.suffix not in extensions:
+                continue
+            if not categories:
                 output[member_name] = item
-        else:
-            output = {cat: [] for cat in categories}
-            index = cls.factory(
-                zipfile_path, pattern=pattern, extensions=extensions)
+                continue
             for category, definition in categories.items():
-                for name, member in index.items():
-                    with member.open('r') as fid:
-                        matched = []
-                        for condition, position in definition.items():
-                            fid.seek(position, 0)
-                            if len(condition) == 0:
-                                b = fid.read()
-                            else:
-                                b = fid.read(len(condition))
-                            matched.append((b == condition))
-                        if extensions:
-                            matched.append((member.suffix in extensions))
-                        if all(matched):
-                            output[category].append(member)
+                matched = True
+                with item.open() as fid:
+                    for condition, position in definition.items():
+                        if isinstance(condition, str):
+                            condition = condition.encode()
+                        fid.seek(position, 0)
+                        b = fid.read(len(condition) or None)
+                        matched &= (b == condition)
+                if matched:
+                    if category not in output:
+                        output[category] = []
+                    output[category].append(item)
         return output
