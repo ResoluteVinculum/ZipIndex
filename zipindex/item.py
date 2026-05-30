@@ -149,7 +149,8 @@ class ZipItem:
         return self.__pointer
 
     def read(self,
-             n: int = None) -> bytes:
+             n: int = None,
+             decode: bool = False) -> bytes:
         """
         open(file, 'rb').read(n)
 
@@ -163,7 +164,7 @@ class ZipItem:
             self.fid.seek(self.__pointer)
             out = self.fid.read(n)
             self.__pointer = self.fid.tell()
-        return out
+        return out.decode() if decode else out
 
     def tell(self):
         """
