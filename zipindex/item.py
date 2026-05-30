@@ -69,11 +69,11 @@ class ZipItem:
             self.member_name = members[0]
         elif len(members) > 1:
             ambig = "\n  - " + "\n  - ".join(members)
-            raise ValueError(f"Pattern: '{member_pattern}' is ambiguous in '{
-                             zipfile_path}'!\nMembers:{ambig}")
+            raise ValueError(f"Pattern: '{member_pattern}' is ambiguous in "
+                             f"'{zipfile_path}'!\nMembers:{ambig}")
         else:
-            raise ValueError(f"Pattern: '{member_pattern}' matches no members of '{
-                             zipfile_path}'!")
+            raise ValueError(f"Pattern: '{member_pattern}' matches no members"
+                             f" of '{zipfile_path}'!")
 
     def neighbor(self, member_pattern: str) -> Self:
         """
@@ -128,8 +128,8 @@ class ZipItem:
 
         """
         self.zf = self.compression_class(self.zipfile_path)
-        _, internals, _ = self.get_compressed_member_keywords()
-        self.fid = getattr(self.zf, internals)(self.member_name)
+        _, _, access = self.get_compressed_member_keywords()
+        self.fid = getattr(self.zf, access)(self.member_name)
         return self.fid
 
     def seek(self,
