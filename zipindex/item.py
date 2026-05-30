@@ -165,7 +165,14 @@ class ZipItem:
             self.__pointer = self.fid.tell()
         return out
 
-    def extract(self, destination_directory: str) -> None:
+    def tell(self):
+        """
+        Tells the current file pointerS
+
+        """
+        return self.__pointer
+
+    def extract(self, destination_directory: str) -> str:
         """
         Direct access to extracting a file
 
@@ -178,8 +185,12 @@ class ZipItem:
         os.makedirs(destination_directory, exist_ok=True)
         member = os.path.basename(self.member_name)
         file = os.path.join(destination_directory, member)
+        current_pointer = self.__pointer
+        self.seek(0,0)
         with open(file, 'wb') as fid:
             fid.write(self.read())
+        self.seek(current_pointer, 0)
+        return file
 
 
     def close(self) -> None:
@@ -359,9 +370,9 @@ class ZipItem:
                 continue
             if pattern and not re.match(pattern, member_name):
                 continue
-            item = cls(zipfile_path, re.escape(member_name))
-            if extensions and item.suffix not in extensions:
+            if extensions and os.path.splitext(member_name)[1] not in extensions:
                 continue
+            item = cls(zipfile_path, re.escape(member_name))
             if not categories:
                 output[member_name] = item
                 continue
