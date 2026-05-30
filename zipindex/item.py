@@ -201,6 +201,9 @@ class ZipItem:
         """
         self.fid.close()
         self.zf.close()
+        
+        self.fid = None
+        self.zf = None
 
     @property
     def suffix(self) -> str:
